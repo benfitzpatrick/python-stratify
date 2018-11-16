@@ -444,7 +444,8 @@ EXTRAPOLATE_LINEAR = extrap_schemes['linear']()
 
 
 def interpolate(z_target, z_src, fz_src, axis=-1, rising=None,
-                interpolation='linear', extrapolation='nan'):
+                interpolation='linear', extrapolation='nan',
+                ensure_float64_arithmetic=False):
     """
     Interface for optimised 1d interpolation across multiple dimensions.
 
@@ -458,6 +459,10 @@ def interpolate(z_target, z_src, fz_src, axis=-1, rising=None,
     from a 3d dataset and associated pressure field. In the case of this
     example, pressure would be the `z` coordinate, and the dataset
     (e.g. geopotential height / temperature etc.) would be `f(z)`.
+
+    Note: if any of the input arrays are 64 bit floating point, then internal
+    computation will be in 64 bit floating point arithmetic. If all input
+    arrays are 32 bit floating point, 32 bit arithmetic will be used.
 
     Parameters
     ----------
@@ -535,15 +540,20 @@ cdef class _Interpolation(object):
                  Interpolator interpolation=INTERPOLATE_LINEAR,
                  Extrapolator extrapolation=EXTRAPOLATE_NAN):
         # Cast data to numpy arrays if not already.
-        z_target = np.array(z_target, dtype=np.float64)
-        z_src = np.array(z_src, dtype=np.float64)
+        self.internal_dtype = np.float64
+        for array in (z_target, z_src, fz_src):
+            if isinstance(array, np.ndarray) and array.dtype == np.float32:
+                self.internal_dtype = np.float32
+                break
+        z_target = np.array(z_target, dtype=self.internal_dtype)
+        z_src = np.array(z_src, dtype=self.internal_dtype)
         fz_src = np.array(fz_src)
         #: The result data dtype.
         if np.issubdtype(fz_src.dtype, int):
             self._target_dtype = np.dtype('f8')
         else:
             self._target_dtype = fz_src.dtype
-        fz_src = fz_src.astype(np.float64)
+        fz_src = fz_src.astype(self.internal_dtype)
 
         # Compute the axis in absolute terms.
         fp_axis = (axis + fz_src.ndim) % fz_src.ndim
@@ -652,7 +662,8 @@ cdef class _Interpolation(object):
 
     def interpolate(self):
         # Construct the output array for the interpolation to fill in.
-        fz_target = np.empty(self._result_working_shape, dtype=np.float64)
+        fz_target = np.empty(self._result_working_shape,
+                             dtype=self.internal_dtype)
 
         cdef unsigned int i, j, ni, nj
 
@@ -686,7 +697,8 @@ cdef class _Interpolation(object):
 
         """
         # Construct the output array for the interpolation to fill in.
-        fz_target = np.empty(self._result_working_shape, dtype=np.float64)
+        fz_target = np.empty(self._result_working_shape,
+                             dtype=self.internal_dtype)
 
         cdef unsigned int i, j, ni, nj
 
