@@ -11,7 +11,10 @@ from Cython.Build import cythonize
 NAME = 'stratify'
 DIR = os.path.abspath(os.path.dirname(__file__))
 
-extensions = [Extension('{}._vinterp'.format(NAME),
+extensions = [Extension('{}.test'.format(NAME),
+                        [os.path.join(NAME, 'test.pyx')],
+                        include_dirs=[np.get_include()]),
+              Extension('{}._vinterp'.format(NAME),
                         [os.path.join(NAME, '_vinterp.pyx')],
                         include_dirs=[np.get_include()]),
               Extension('{}._conservative'.format(NAME),
