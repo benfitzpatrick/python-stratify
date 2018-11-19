@@ -262,7 +262,7 @@ class Test_EXTRAPOLATE_LINEAR(unittest.TestCase):
         assert_array_equal(self.interpolate([-1]), [-10.])
 
     def test_above(self):
-        assert_array_almost_equal(self.interpolate([15.123]), [151.23])
+        assert_array_almost_equal(self.interpolate([15.123]), [151.229996])
 
     def test_zero_gradient(self):
         assert_array_almost_equal(

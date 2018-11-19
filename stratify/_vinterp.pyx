@@ -23,7 +23,7 @@ __all__ = ['interpolate',
            'EXTRAPOLATE_NAN', 'EXTRAPOLATE_NEAREST', 'EXTRAPOLATE_LINEAR']
 
 
-cdef inline int relative_sign(double z, double z_base) nogil:
+cdef inline int relative_sign(float z, float z_base) nogil:
     """
     Return the sign of z relative to z_base.
 
@@ -37,7 +37,7 @@ cdef inline int relative_sign(double z, double z_base) nogil:
     +1 if z > z_base, 0 if z == z_base, and -1 if z < z_base
 
     """
-    cdef double delta
+    cdef float delta
 
     delta = z - z_base
     # 1, -1, or 0. http://stackoverflow.com/a/1903975/741316
@@ -46,11 +46,11 @@ cdef inline int relative_sign(double z, double z_base) nogil:
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef long gridwise_interpolation(double[:] z_target, double[:] z_src,
-                                 double[:, :] fz_src, bint increasing,
+cdef long gridwise_interpolation(float[:] z_target, float[:] z_src,
+                                 float[:, :] fz_src, bint increasing,
                                  Interpolator interpolation,
                                  Extrapolator extrapolation,
-                                 double [:, :] fz_target) nogil except -1:
+                                 float [:, :] fz_target) nogil except -1:
     """
     Computes the interpolation of multiple levels of a single column.
 
@@ -84,7 +84,7 @@ cdef long gridwise_interpolation(double[:] z_target, double[:] z_src,
     """
     cdef unsigned int i_src, i_target, n_src, n_target, i, m
     cdef bint all_nans = True
-    cdef double z_before, z_current, z_after, z_last
+    cdef float z_before, z_current, z_after, z_last
     cdef int sign_after, sign_before, extrapolating
 
     n_src = z_src.shape[0]
@@ -170,8 +170,8 @@ cdef long gridwise_interpolation(double[:] z_target, double[:] z_src,
 
 cdef class Interpolator(object):
     cdef long kernel(self, unsigned int index,
-                     double[:] z_src, double[:, :] fz_src,
-                     double level, double[:] fz_level
+                     float[:] z_src, float[:, :] fz_src,
+                     float level, float[:] fz_level
                      ) nogil except -1:
         """
         The inner part of an interpolation operation.
@@ -181,12 +181,12 @@ cdef class Interpolator(object):
         i (unsigned int) - the current (upper) index along z_src. 0 <= i < z_src.size[0]
                   i will only ever be 0 if z_src[i] == current_level.
                   the interpolation value may lie on exactly i, but will never lie on exactly i-1.
-        z_src (double array) - the 1d column of z_src values.
-        fz_src (2d double array) - the m 1d columns of fz_src values.
+        z_src (float array) - the 1d column of z_src values.
+        fz_src (2d float array) - the m 1d columns of fz_src values.
                                fz_src.shape[1] == z_src.shape[0].
                                fz_src.shape[0] may be 1 (common).
-        current_level (double) - the value that we are interpolating for
-        fz_target (double array) - the pre-allocated array to put the resulting
+        current_level (float) - the value that we are interpolating for
+        fz_target (float array) - the pre-allocated array to put the resulting
                                    interpolated values into.
 
         """
@@ -194,8 +194,8 @@ cdef class Interpolator(object):
             raise RuntimeError('Interpolator subclasses should implement '
                                'the kernel function.')
 
-    cdef bint prepare_column(self, double[:] z_target, double[:] z_src,
-                      double[:, :] fz_src, bint increasing) nogil except -1:
+    cdef bint prepare_column(self, float[:] z_target, float[:] z_src,
+                      float[:, :] fz_src, bint increasing) nogil except -1:
         # Called before all levels are interpolated.
         pass
 
@@ -203,8 +203,8 @@ cdef class Interpolator(object):
 cdef class LinearInterpolator(Interpolator):
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef long kernel(self, unsigned int index, double[:] z_src, double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+    cdef long kernel(self, unsigned int index, float[:] z_src, float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         """
         Compute a linear interpolation.
 
@@ -217,7 +217,7 @@ cdef class LinearInterpolator(Interpolator):
 
         """
         cdef unsigned int m = fz_src.shape[0]
-        cdef double frac
+        cdef float frac
         cdef unsigned int i
 
         if level == z_src[index]:
@@ -235,8 +235,8 @@ cdef class LinearInterpolator(Interpolator):
 cdef class NearestNInterpolator(Interpolator):
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef long kernel(self, unsigned int index, double[:] z_src, double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+    cdef long kernel(self, unsigned int index, float[:] z_src, float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         """Compute a nearest-neighbour interpolation."""
         cdef unsigned int m = fz_src.shape[0]
         cdef unsigned int nearest_index, i
@@ -267,8 +267,8 @@ cdef class PyFuncInterpolator(Interpolator):
         """
         pass
 
-    cdef bint prepare_column(self, double[:] z_target, double[:] z_src,
-                      double[:, :] fz_src, bint increasing) nogil except -1:
+    cdef bint prepare_column(self, float[:] z_target, float[:] z_src,
+                      float[:, :] fz_src, bint increasing) nogil except -1:
         if self.use_column_prep:
             with gil:
                 self.column_prep(z_target, z_src, fz_src, increasing)
@@ -282,17 +282,17 @@ cdef class PyFuncInterpolator(Interpolator):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef long kernel(self,
-                     unsigned int index, double[:] z_src,
-                     double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+                     unsigned int index, float[:] z_src,
+                     float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         with gil:
             self.interp_kernel(index, z_src, fz_src, level, fz_target)
 
 
 cdef class Extrapolator(object):
     cdef long kernel(self, int direction,
-                     double[:] z_src, double[:, :] fz_src,
-                     double current_level, double[:] fz_target
+                     float[:] z_src, float[:, :] fz_src,
+                     float current_level, float[:] fz_target
                     ) nogil except -1:
         """
         Defines the inner part of an extrapolation operation.
@@ -300,29 +300,29 @@ cdef class Extrapolator(object):
         Parameters:
         ----------
         direction (int) - -1 for the bottom edge, +1 for the top edge
-        z_src (double array) - the 1d column of z_src values.
-        fz_src (2d double array) - the m 1d columns of fz_src values.
+        z_src (float array) - the 1d column of z_src values.
+        fz_src (2d float array) - the m 1d columns of fz_src values.
                                fz_src.shape[1] == z_src.shape[0].
                                fz_src.shape[0] may be 1 (common).
-        current_level (double) - the value that we are interpolating for
-        fz_target (double array) - the pre-allocated array to put the resulting
+        current_level (float) - the value that we are interpolating for
+        fz_target (float array) - the pre-allocated array to put the resulting
                                    extrapolated values into.
         """
         with gil:
             raise RuntimeError('Interpolator subclasses should implement '
                                'the kernel function.')
 
-    cdef bint prepare_column(self, double[:] z_target, double[:] z_src,
-                      double[:, :] fz_src, bint increasing) nogil except -1:
+    cdef bint prepare_column(self, float[:] z_target, float[:] z_src,
+                      float[:, :] fz_src, bint increasing) nogil except -1:
         pass
 
 
 cdef class NaNExtrapolator(Extrapolator):
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef long kernel(self, int direction, double[:] z_src,
-                     double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+    cdef long kernel(self, int direction, float[:] z_src,
+                     float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         """NaN values for extrapolation."""
         cdef unsigned int m = fz_src.shape[0]
         cdef unsigned int i
@@ -335,9 +335,9 @@ cdef class NearestNExtrapolator(Extrapolator):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef long kernel(self,
-                     int direction, double[:] z_src,
-                     double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+                     int direction, float[:] z_src,
+                     float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         """Nearest-neighbour/edge extrapolation."""
         cdef unsigned int m = fz_src.shape[0]
         cdef unsigned int index, i
@@ -352,8 +352,8 @@ cdef class NearestNExtrapolator(Extrapolator):
 
 
 cdef class LinearExtrapolator(Extrapolator):
-    cdef bint prepare_column(self, double[:] z_target, double[:] z_src,
-                      double[:, :] fz_src, bint increasing) nogil except -1:
+    cdef bint prepare_column(self, float[:] z_target, float[:] z_src,
+                      float[:, :] fz_src, bint increasing) nogil except -1:
         cdef unsigned int n_src_pts = z_src.shape[0]
 
         if n_src_pts < 2:
@@ -363,14 +363,14 @@ cdef class LinearExtrapolator(Extrapolator):
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef long kernel(self, int direction, double[:] z_src,
-                     double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+    cdef long kernel(self, int direction, float[:] z_src,
+                     float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         """Linear extrapolation using either the first or last 2 values."""
         cdef unsigned int m = fz_src.shape[0]
         cdef unsigned int n_src_pts = fz_src.shape[1]
         cdef unsigned int p0, p1, i
-        cdef double frac, z_step
+        cdef float frac, z_step
 
         if direction < 0:
             p0, p1 = 0, 1
@@ -407,8 +407,8 @@ cdef class PyFuncExtrapolator(Extrapolator):
         """
         pass
 
-    cdef bint prepare_column(self, double[:] z_target, double[:] z_src,
-                      double[:, :] fz_src, bint increasing) nogil except -1:
+    cdef bint prepare_column(self, float[:] z_target, float[:] z_src,
+                      float[:, :] fz_src, bint increasing) nogil except -1:
         if self.use_column_prep:
             with gil:
                 self.column_prep(z_target, z_src, fz_src, increasing)
@@ -420,9 +420,9 @@ cdef class PyFuncExtrapolator(Extrapolator):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef long kernel(self,
-                     int direction, double[:] z_src,
-                     double[:, :] fz_src, double level,
-                     double[:] fz_target) nogil except -1:
+                     int direction, float[:] z_src,
+                     float[:, :] fz_src, float level,
+                     float[:] fz_target) nogil except -1:
         with gil:
             self.extrap_kernel(direction, z_src, fz_src, level, fz_target)
 
@@ -535,15 +535,15 @@ cdef class _Interpolation(object):
                  Interpolator interpolation=INTERPOLATE_LINEAR,
                  Extrapolator extrapolation=EXTRAPOLATE_NAN):
         # Cast data to numpy arrays if not already.
-        z_target = np.array(z_target, dtype=np.float64)
-        z_src = np.array(z_src, dtype=np.float64)
+        z_target = np.array(z_target, dtype=np.float32)
+        z_src = np.array(z_src, dtype=np.float32)
         fz_src = np.array(fz_src)
         #: The result data dtype.
         if np.issubdtype(fz_src.dtype, int):
             self._target_dtype = np.dtype('f8')
         else:
             self._target_dtype = fz_src.dtype
-        fz_src = fz_src.astype(np.float64)
+        fz_src = fz_src.astype(np.float32)
 
         # Compute the axis in absolute terms.
         fp_axis = (axis + fz_src.ndim) % fz_src.ndim
@@ -652,7 +652,7 @@ cdef class _Interpolation(object):
 
     def interpolate(self):
         # Construct the output array for the interpolation to fill in.
-        fz_target = np.empty(self._result_working_shape, dtype=np.float64)
+        fz_target = np.empty(self._result_working_shape, dtype=np.float32)
 
         cdef unsigned int i, j, ni, nj
 
@@ -660,12 +660,12 @@ cdef class _Interpolation(object):
         nj = fz_target.shape[3]
 
         # Pull in our pre-formed z_target, z_src, and fz_src arrays.
-        cdef double[:] z_target = self.z_target
-        cdef double[:, :, :] z_src = self._zp_reshaped
-        cdef double[:, :, :, :] fz_src = self._fp_reshaped
+        cdef float[:] z_target = self.z_target
+        cdef float[:, :, :] z_src = self._zp_reshaped
+        cdef float[:, :, :, :] fz_src = self._fp_reshaped
 
         # Construct a memory view of the fz_target array.
-        cdef double[:, :, :, :] fz_target_view = fz_target
+        cdef float[:, :, :, :] fz_target_view = fz_target
 
         # Release the GIL and do the for loop over the left-hand, and
         # right-hand dimensions. The loop optimised for row-major data (C).
@@ -686,7 +686,7 @@ cdef class _Interpolation(object):
 
         """
         # Construct the output array for the interpolation to fill in.
-        fz_target = np.empty(self._result_working_shape, dtype=np.float64)
+        fz_target = np.empty(self._result_working_shape, dtype=np.float32)
 
         cdef unsigned int i, j, ni, nj
 
@@ -694,14 +694,14 @@ cdef class _Interpolation(object):
         nj = fz_target.shape[3]
 
         z_target_reshaped = self.z_target.reshape(self._result_working_shape[1:])
-        cdef double[:, :, :] z_target = z_target_reshaped
+        cdef float[:, :, :] z_target = z_target_reshaped
 
         # Pull in our pre-formed z_src, and fz_src arrays.
-        cdef double[:, :, :] z_src = self._zp_reshaped
-        cdef double[:, :, :, :] fz_src = self._fp_reshaped
+        cdef float[:, :, :] z_src = self._zp_reshaped
+        cdef float[:, :, :, :] fz_src = self._fp_reshaped
 
         # Construct a memory view of the fz_target array.
-        cdef double[:, :, :, :] fz_target_view = fz_target
+        cdef float[:, :, :, :] fz_target_view = fz_target
 
         # Release the GIL and do the for loop over the left-hand, and
         # right-hand dimensions. The loop optimised for row-major data (C).
